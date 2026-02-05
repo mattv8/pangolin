@@ -4,6 +4,7 @@ import { Newt } from "@server/db";
 import { eq, and } from "drizzle-orm";
 import logger from "@server/logger";
 import { unknown } from "zod";
+import { onHealthCheckUpdate } from "@server/routers/dns/dnsAuthority";
 
 interface TargetHealthStatus {
     status: string;
@@ -58,6 +59,7 @@ export const handleHealthcheckStatusMessage: MessageHandler = async (
     try {
         let successCount = 0;
         let errorCount = 0;
+        const updatedTargetIds: number[] = [];
 
         // Process each target status update
         for (const [targetId, healthStatus] of Object.entries(data.targets)) {
@@ -114,11 +116,21 @@ export const handleHealthcheckStatusMessage: MessageHandler = async (
                 `Updated health status for target ${targetId} to ${healthStatus.status}`
             );
             successCount++;
+            updatedTargetIds.push(targetIdNum);
         }
 
         logger.debug(
             `Health status update complete: ${successCount} successful, ${errorCount} errors out of ${Object.keys(data.targets).length} targets`
         );
+
+        // Notify DNS authority module about health check updates
+        if (updatedTargetIds.length > 0) {
+            try {
+                await onHealthCheckUpdate(updatedTargetIds);
+            } catch (error) {
+                logger.error("Error updating DNS authority config:", error);
+            }
+        }
     } catch (error) {
         logger.error("Error processing healthcheck status message:", error);
     }

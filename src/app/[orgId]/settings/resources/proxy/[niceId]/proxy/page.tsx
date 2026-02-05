@@ -11,6 +11,7 @@ import {
     SelectValue
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { DNSAuthorityForm } from "@app/components/DNSAuthorityForm";
 import { HeadersInput } from "@app/components/HeadersInput";
 import {
     PathMatchDisplay,
@@ -148,6 +149,11 @@ export default function ReverseProxyTargetsPage(props: {
                     updateResource={updateResource}
                 />
             )}
+
+            <DNSAuthorityForm
+                resource={resource}
+                updateResource={updateResource}
+            />
         </SettingsContainer>
     );
 }

@@ -10,6 +10,7 @@ import logger from "@server/logger";
 import { fromError } from "zod-validation-error";
 import { OpenAPITags, registry } from "@server/openApi";
 import { isValidCIDR } from "@server/lib/validators";
+import { getServerIp } from "@server/lib/serverIpService";
 
 const updateSiteParamsSchema = z.strictObject({
     siteId: z.string().transform(Number).pipe(z.int().positive())
@@ -20,7 +21,9 @@ const updateSiteBodySchema = z
         name: z.string().min(1).max(255).optional(),
         niceId: z.string().min(1).max(255).optional(),
         dockerSocketEnabled: z.boolean().optional(),
-        remoteSubnets: z.string().optional()
+        remoteSubnets: z.string().optional(),
+        publicIp: z.ipv4().nullable().optional(),
+        dnsAuthorityEnabled: z.boolean().optional()
         // subdomain: z
         //     .string()
         //     .min(1)
@@ -34,7 +37,7 @@ const updateSiteBodySchema = z
         // megabytesOut: z.number().int().nonnegative().optional(),
     })
     .refine((data) => Object.keys(data).length > 0, {
-        error: "At least one field must be provided for update"
+        message: "At least one field must be provided for update"
     });
 
 registry.registerPath({
@@ -118,6 +121,30 @@ export async function updateSite(
                         createHttpError(
                             HttpCode.BAD_REQUEST,
                             `Invalid CIDR format: ${subnet}`
+                        )
+                    );
+                }
+            }
+        }
+
+// if enabling DNS Authority, ensure a publicIp is set (either in update, existing, or server-detected)
+        if (updateData.dnsAuthorityEnabled === true && !updateData.publicIp) {
+            const existingSite = await db
+                .select({ publicIp: sites.publicIp })
+                .from(sites)
+                .where(eq(sites.siteId, siteId))
+                .limit(1);
+
+            if (!existingSite.length || !existingSite[0].publicIp) {
+                // Fall back to server's detected public IP
+                const serverIp = getServerIp();
+                if (serverIp) {
+                    updateData.publicIp = serverIp;
+                } else {
+                    return next(
+                        createHttpError(
+                            HttpCode.BAD_REQUEST,
+                            "Public IP is required when enabling DNS Authority. Could not auto-detect server IP."
                         )
                     );
                 }

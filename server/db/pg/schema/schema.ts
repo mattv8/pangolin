@@ -91,7 +91,10 @@ export const sites = pgTable("sites", {
     publicKey: varchar("publicKey"),
     lastHolePunch: bigint("lastHolePunch", { mode: "number" }),
     listenPort: integer("listenPort"),
-    dockerSocketEnabled: boolean("dockerSocketEnabled").notNull().default(true)
+    dockerSocketEnabled: boolean("dockerSocketEnabled").notNull().default(true),
+    // DNS Authority fields - for sites that can serve as authoritative DNS
+    publicIp: varchar("publicIp"), // Public IP address for DNS authority responses
+    dnsAuthorityEnabled: boolean("dnsAuthorityEnabled").notNull().default(false) // Whether this site serves as DNS authority
 });
 
 export const resources = pgTable("resources", {
@@ -142,7 +145,13 @@ export const resources = pgTable("resources", {
     }).default("forced"), // "forced" = always show, "automatic" = only when down
     maintenanceTitle: text("maintenanceTitle"),
     maintenanceMessage: text("maintenanceMessage"),
-    maintenanceEstimatedTime: text("maintenanceEstimatedTime")
+    maintenanceEstimatedTime: text("maintenanceEstimatedTime"),
+    // DNS Authority fields - for intelligent DNS routing based on health checks
+    dnsAuthorityEnabled: boolean("dnsAuthorityEnabled").notNull().default(false), // Enable DNS authority for this resource
+    dnsAuthorityTtl: integer("dnsAuthorityTtl").default(60), // TTL for DNS responses in seconds
+    dnsAuthorityRoutingPolicy: text("dnsAuthorityRoutingPolicy", {
+        enum: ["failover", "roundrobin", "priority"]
+    }).default("failover") // Routing policy based on health checks
 });
 
 export const targets = pgTable("targets", {

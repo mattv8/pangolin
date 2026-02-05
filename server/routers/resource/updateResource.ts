@@ -24,6 +24,8 @@ import { createCertificate } from "#dynamic/routers/certificates/createCertifica
 import { validateAndConstructDomain } from "@server/lib/domainUtils";
 import { build } from "@server/build";
 import { isLicensedOrSubscribed } from "#dynamic/lib/isLicencedOrSubscribed";
+import { updateDNSAuthorityForResource } from "@server/routers/dns/dnsAuthority";
+import { updateAuthProxyForResource } from "@server/routers/auth/authProxy";
 
 const updateResourceParamsSchema = z.strictObject({
     resourceId: z.string().transform(Number).pipe(z.int().positive())
@@ -54,7 +56,11 @@ const updateHttpResourceBodySchema = z
         maintenanceModeType: z.enum(["forced", "automatic"]).optional(),
         maintenanceTitle: z.string().max(255).nullable().optional(),
         maintenanceMessage: z.string().max(2000).nullable().optional(),
-        maintenanceEstimatedTime: z.string().max(100).nullable().optional()
+        maintenanceEstimatedTime: z.string().max(100).nullable().optional(),
+        // DNS Authority fields
+        dnsAuthorityEnabled: z.boolean().optional(),
+        dnsAuthorityTtl: z.int().min(1).max(86400).optional(),
+        dnsAuthorityRoutingPolicy: z.enum(["failover", "roundrobin", "priority"]).optional()
     })
     .refine((data) => Object.keys(data).length > 0, {
         error: "At least one field must be provided for update"
@@ -103,7 +109,11 @@ const updateRawResourceBodySchema = z
         stickySession: z.boolean().optional(),
         enabled: z.boolean().optional(),
         proxyProtocol: z.boolean().optional(),
-        proxyProtocolVersion: z.int().min(1).optional()
+        proxyProtocolVersion: z.int().min(1).optional(),
+        // DNS Authority fields
+        dnsAuthorityEnabled: z.boolean().optional(),
+        dnsAuthorityTtl: z.int().min(1).max(86400).optional(),
+        dnsAuthorityRoutingPolicy: z.enum(["failover", "roundrobin", "priority"]).optional()
     })
     .refine((data) => Object.keys(data).length > 0, {
         error: "At least one field must be provided for update"
@@ -365,6 +375,33 @@ async function updateHttpResource(
         );
     }
 
+    // Update DNS authority config if DNS authority settings changed
+    if (
+        updateData.dnsAuthorityEnabled !== undefined ||
+        updateData.dnsAuthorityTtl !== undefined ||
+        updateData.dnsAuthorityRoutingPolicy !== undefined
+    ) {
+        try {
+            await updateDNSAuthorityForResource(resource.resourceId);
+        } catch (error) {
+            logger.error("Failed to update DNS authority config:", error);
+        }
+    }
+
+    // Update auth proxy config if SSO or DNS authority settings changed
+    if (
+        updateData.dnsAuthorityEnabled !== undefined ||
+        updateData.sso !== undefined ||
+        updateData.blockAccess !== undefined ||
+        updateData.emailWhitelistEnabled !== undefined
+    ) {
+        try {
+            await updateAuthProxyForResource(resource.resourceId);
+        } catch (error) {
+            logger.error("Failed to update auth proxy config:", error);
+        }
+    }
+
     return response(res, {
         data: updatedResource[0],
         success: true,
@@ -437,6 +474,19 @@ async function updateRawResource(
                 `Resource with ID ${resource.resourceId} not found`
             )
         );
+    }
+
+    // Update DNS authority config if DNS authority settings changed
+    if (
+        updateData.dnsAuthorityEnabled !== undefined ||
+        updateData.dnsAuthorityTtl !== undefined ||
+        updateData.dnsAuthorityRoutingPolicy !== undefined
+    ) {
+        try {
+            await updateDNSAuthorityForResource(resource.resourceId);
+        } catch (error) {
+            logger.error("Failed to update DNS authority config:", error);
+        }
     }
 
     return response(res, {

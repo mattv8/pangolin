@@ -101,7 +101,12 @@ export const sites = sqliteTable("sites", {
     listenPort: integer("listenPort"),
     dockerSocketEnabled: integer("dockerSocketEnabled", { mode: "boolean" })
         .notNull()
-        .default(true)
+        .default(true),
+    // DNS Authority fields - for sites that can serve as authoritative DNS
+    publicIp: text("publicIp"), // Public IP address for DNS authority responses
+    dnsAuthorityEnabled: integer("dnsAuthorityEnabled", { mode: "boolean" })
+        .notNull()
+        .default(false) // Whether this site serves as DNS authority
 });
 
 export const resources = sqliteTable("resources", {
@@ -162,7 +167,15 @@ export const resources = sqliteTable("resources", {
     }).default("forced"), // "forced" = always show, "automatic" = only when down
     maintenanceTitle: text("maintenanceTitle"),
     maintenanceMessage: text("maintenanceMessage"),
-    maintenanceEstimatedTime: text("maintenanceEstimatedTime")
+    maintenanceEstimatedTime: text("maintenanceEstimatedTime"),
+    // DNS Authority fields - for intelligent DNS routing based on health checks
+    dnsAuthorityEnabled: integer("dnsAuthorityEnabled", { mode: "boolean" })
+        .notNull()
+        .default(false), // Enable DNS authority for this resource
+    dnsAuthorityTtl: integer("dnsAuthorityTtl").default(60), // TTL for DNS responses in seconds
+    dnsAuthorityRoutingPolicy: text("dnsAuthorityRoutingPolicy", {
+        enum: ["failover", "roundrobin", "priority"]
+    }).default("failover") // Routing policy based on health checks
 });
 
 export const targets = sqliteTable("targets", {

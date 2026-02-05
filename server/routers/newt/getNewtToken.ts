@@ -1,6 +1,6 @@
 import { generateSessionToken } from "@server/auth/sessions/app";
 import { db } from "@server/db";
-import { newts } from "@server/db";
+import { newts, sites } from "@server/db";
 import HttpCode from "@server/types/HttpCode";
 import response from "@server/lib/response";
 import { eq } from "drizzle-orm";
@@ -94,6 +94,30 @@ export async function getNewtToken(
 
         const resToken = generateSessionToken();
         await createNewtSession(resToken, existingNewt.newtId);
+
+        // Auto-detect and update site's publicIp if not already set
+        if (existingNewt.siteId && req.ip) {
+            // Strip IPv6 prefix if present (e.g., "::ffff:1.2.3.4" -> "1.2.3.4")
+            let clientIp = req.ip;
+            if (clientIp.startsWith("::ffff:")) {
+                clientIp = clientIp.slice(7);
+            }
+
+            // Only update if the site's publicIp is null/empty
+            const [site] = await db
+                .select({ publicIp: sites.publicIp })
+                .from(sites)
+                .where(eq(sites.siteId, existingNewt.siteId))
+                .limit(1);
+
+            if (site && !site.publicIp) {
+                await db
+                    .update(sites)
+                    .set({ publicIp: clientIp })
+                    .where(eq(sites.siteId, existingNewt.siteId));
+                logger.debug(`Auto-detected site publicIp: ${clientIp} for site ${existingNewt.siteId}`);
+            }
+        }
 
         return response<{ token: string; serverVersion: string }>(res, {
             data: {

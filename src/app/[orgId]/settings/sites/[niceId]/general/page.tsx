@@ -38,8 +38,16 @@ import Link from "next/link";
 const GeneralFormSchema = z.object({
     name: z.string().nonempty("Name is required"),
     niceId: z.string().min(1).max(255).optional(),
-    dockerSocketEnabled: z.boolean().optional()
-});
+    dockerSocketEnabled: z.boolean().optional(),
+    publicIp: z.ipv4().nullable().optional().or(z.literal("")),
+    dnsAuthorityEnabled: z.boolean().optional()
+}).refine(
+    (data) => !data.dnsAuthorityEnabled || (data.publicIp && data.publicIp !== ""),
+    {
+        message: "Public IP is required when DNS Authority is enabled",
+        path: ["publicIp"]
+    }
+);
 
 type GeneralFormValues = z.infer<typeof GeneralFormSchema>;
 
@@ -62,7 +70,9 @@ export default function GeneralPage() {
         defaultValues: {
             name: site?.name,
             niceId: site?.niceId || "",
-            dockerSocketEnabled: site?.dockerSocketEnabled ?? false
+            dockerSocketEnabled: site?.dockerSocketEnabled ?? false,
+            publicIp: site?.publicIp || "",
+            dnsAuthorityEnabled: site?.dnsAuthorityEnabled ?? false
         },
         mode: "onChange"
     });
@@ -74,13 +84,17 @@ export default function GeneralPage() {
             await api.post(`/site/${site?.siteId}`, {
                 name: data.name,
                 niceId: data.niceId,
-                dockerSocketEnabled: data.dockerSocketEnabled
+                dockerSocketEnabled: data.dockerSocketEnabled,
+                publicIp: data.publicIp || null,
+                dnsAuthorityEnabled: data.dnsAuthorityEnabled
             });
 
             updateSite({
                 name: data.name,
                 niceId: data.niceId,
-                dockerSocketEnabled: data.dockerSocketEnabled
+                dockerSocketEnabled: data.dockerSocketEnabled,
+                publicIp: data.publicIp || null,
+                dnsAuthorityEnabled: data.dnsAuthorityEnabled
             });
 
             if (data.niceId && data.niceId !== site?.niceId) {
@@ -203,6 +217,68 @@ export default function GeneralPage() {
                                                         </span>
                                                     </Link>
                                                 </FormDescription>
+                                            </FormItem>
+                                        )}
+                                    />
+                                )}
+
+                                <FormField
+                                    control={form.control}
+                                    name="dnsAuthorityEnabled"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormControl>
+                                                <SwitchInput
+                                                    id="dns-authority-enabled"
+                                                    label={t(
+                                                        "siteDnsAuthorityEnable"
+                                                    )}
+                                                    defaultChecked={field.value}
+                                                    onCheckedChange={(checked: boolean) => {
+                                                        field.onChange(checked);
+                                                        // Auto-populate publicIp from server's detected IP when enabling
+                                                        if (checked && !form.getValues("publicIp")) {
+                                                            const defaultIp = site?.publicIp || site?.serverPublicIp || "";
+                                                            if (defaultIp) {
+                                                                form.setValue("publicIp", defaultIp);
+                                                            }
+                                                        }
+                                                    }}
+                                                />
+                                            </FormControl>
+                                            <FormDescription>
+                                                {t(
+                                                    "siteDnsAuthorityDescription"
+                                                )}
+                                            </FormDescription>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+
+                                {form.watch("dnsAuthorityEnabled") && (
+                                    <FormField
+                                        control={form.control}
+                                        name="publicIp"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>
+                                                    {t("sitePublicIp")}
+                                                </FormLabel>
+                                                <FormControl>
+                                                    <Input
+                                                        {...field}
+                                                        value={field.value || ""}
+                                                        placeholder={site?.serverPublicIp || t(
+                                                            "sitePublicIpPlaceholder"
+                                                        )}
+                                                        className="flex-1"
+                                                    />
+                                                </FormControl>
+                                                <FormDescription>
+                                                    {t("sitePublicIpDescription")}
+                                                </FormDescription>
+                                                <FormMessage />
                                             </FormItem>
                                         )}
                                     />
