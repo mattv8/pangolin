@@ -53,8 +53,8 @@ interface DNSAuthorityFormProps {
 
 const dnsAuthoritySchema = z.object({
     dnsAuthorityEnabled: z.boolean(),
-    dnsAuthorityTtl: z.number().min(10).max(86400).default(60),
-    dnsAuthorityRoutingPolicy: z.enum(["failover", "roundrobin", "priority"]).default("failover")
+    dnsAuthorityTtl: z.number().min(10).max(86400),
+    dnsAuthorityRoutingPolicy: z.enum(["failover", "roundrobin", "priority"])
 });
 
 type DNSAuthorityFormData = z.infer<typeof dnsAuthoritySchema>;

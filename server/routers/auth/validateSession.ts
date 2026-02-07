@@ -7,6 +7,8 @@ import logger from "@server/logger";
 import { registry } from "@server/openApi";
 import { OpenAPITags } from "@server/openApi";
 import { z } from "zod";
+import { sha256 } from "@oslojs/crypto/sha2";
+import { encodeHexLowerCase } from "@oslojs/encoding";
 
 export interface SessionValidationResponse {
     valid: boolean;
@@ -51,6 +53,11 @@ export async function validateSession(
         }
 
         // Look up the session in the database
+        // Session ID is the SHA256 hash of the session token
+        const sessionId = encodeHexLowerCase(
+            sha256(new TextEncoder().encode(sessionToken))
+        );
+
         const now = new Date();
         const [session] = await db
             .select({
@@ -61,8 +68,8 @@ export async function validateSession(
             .from(sessions)
             .where(
                 and(
-                    eq(sessions.sessionToken, sessionToken),
-                    gt(sessions.expiresAt, now)
+                    eq(sessions.sessionId, sessionId),
+                    gt(sessions.expiresAt, now.getTime())
                 )
             )
             .limit(1);
@@ -104,8 +111,8 @@ export async function validateSession(
             data: {
                 valid: true,
                 userId: user.userId,
-                email: user.email,
-                expiresAt: session.expiresAt.toISOString()
+                email: user.email || undefined,
+                expiresAt: new Date(session.expiresAt).toISOString()
             },
             success: true,
             error: false,
